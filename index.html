@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Smart Auto-Complete</title>
+  <style>
+    body {
+      background: #1e272e;
+      font-family: sans-serif;
+      color: #fff;
+      padding: 40px;
+    }
+    .container {
+      max-width: 700px;
+      margin: auto;
+      background: #2f3640;
+      padding: 30px;
+      border-radius: 12px;
+    }
+    input, button {
+      padding: 12px;
+      width: 100%;
+      margin: 10px 0;
+      font-size: 16px;
+    }
+    ul {
+      list-style: none;
+      padding: 0;
+    }
+    li {
+      padding: 8px;
+      background: #485460;
+      margin-bottom: 6px;
+      cursor: pointer;
+      border-radius: 6px;
+    }
+    li:hover {
+      background: #576574;
+    }
+    #pageResults {
+      margin-top: 30px;
+    }
+    .page-box {
+      background: #353b48;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+    .page-text {
+      white-space: pre-wrap;
+    }
+    mark {
+      background-color: yellow;
+      color: black;
+      padding: 2px 4px;
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>🧠 Smart Auto-Complete</h2>
+    <input type="text" id="autocomplete" placeholder="Start typing..." />
+    <ul id="suggestions"></ul>
+
+    <h3>📄 Upload PDF to Train System</h3>
+    <input type="file" id="pdfInput" />
+    <button onclick="uploadPDF()">Upload & Analyze PDF</button>
+
+    <div id="pageResults"></div>
+  </div>
+
+  <script>
+    const input = document.getElementById('autocomplete');
+    const suggestionsBox = document.getElementById('suggestions');
+    const resultDiv = document.getElementById('pageResults');
+
+    input.addEventListener('input', async () => {
+      const prefix = input.value;
+      if (!prefix.trim()) {
+        suggestionsBox.innerHTML = "";
+        return;
+      }
+
+      const res = await fetch(`/autocomplete?prefix=${encodeURIComponent(prefix)}`);
+      const words = await res.json();
+      suggestionsBox.innerHTML = words.map(w =>
+        `<li onclick="showPages('${w}')">${w}</li>`
+      ).join('');
+    });
+
+    async function uploadPDF() {
+      const fileInput = document.getElementById('pdfInput');
+      if (!fileInput.files.length) {
+        alert("Please select a PDF.");
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('file', fileInput.files[0]);
+
+      const res = await fetch('/upload_pdf', {
+        method: 'POST',
+        body: formData
+      });
+
+      const msg = await res.text();
+      alert(msg);
+      resultDiv.innerHTML = "";
+    }
+
+    async function showPages(word) {
+      const res = await fetch(`/page_texts?word=${encodeURIComponent(word)}`);
+      const pages = await res.json();
+
+      if (!pages.length) {
+        resultDiv.innerHTML = "<p>No matches found.</p>";
+        return;
+      }
+
+      const highlight = (text, word) => {
+        const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(`\\b(${escaped})\\b`, 'gi');
+        return text.replace(regex, `<mark>$1</mark>`);
+      };
+
+      resultDiv.innerHTML = pages.map(p =>
+        `<div class="page-box">
+          <h4>Page ${p.page}</h4>
+          <div class="page-text">${highlight(p.text, word)}</div>
+        </div>`
+      ).join('');
+    }
+  </script>
+</body>
+</html>
